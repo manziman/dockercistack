@@ -51,6 +51,10 @@ Make attachable network for stack/containers.
 
 `docker network create --driver=overlay --attachable dev`
 
+TODO:
+Build jenkins docker image***
+Add Jenkins back to stack
+
 Deploy stack and launch jenkins container.
 
 `docker stack deploy -c docker-compose.yml <STACK_NAME>`
@@ -64,7 +68,8 @@ docker run \
 -p 8080:8080 \
 -p 50000:50000 \
 -v /srv/jenkins:/var/jenkins_home \
-jenkins
+-v /var/run/docker.sock:/var/run/docker.sock \
+jenkins-docker
 ```
 
 Docker output formatting for `docker ps` (Optional but helpful):
@@ -97,7 +102,9 @@ Provide password for gogs db user.
 
 **Jenkins Setup**
 
-Plugins to install: Artifactory, Gogs, Robot Framework, Go
+Plugins to install: Artifactory, Gogs, Robot Framework, Go.
+
+Set docker binary path.
 
 Create pipeline job using jenkinsfile. Select the settings: Use Gogs secret, Build when a change is pushed to Gogs.
 

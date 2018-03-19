@@ -1,5 +1,6 @@
 pipeline {
     node {
+   
         // Install the desired Go version
         def root = tool name: 'go-1.9.3', type: 'go'
         
@@ -35,14 +36,20 @@ pipeline {
                 
                 stage('Build'){
                     echo 'Building Executable'
-                
+                    
+                    sh 'docker network create --attachable test'
+                    
+                    sh 'docker run --rm --name server --network test golang ls -la /go'
+                    
+                    sh 'docker network rm test'
+                    
                     //Produced binary is $GOPATH/?
                     sh """cd $GOPATH/testWeb/src/ && go build -ldflags '-s' -o testWeb.out"""
                 }
                 
                 stage('Artifactory send'){
                     
-                    def server = Artifactory.newServer url: 'http://artifactory:8081/artifactory/', username: 'themanzi', password: 'manz1238'
+                    def server = Artifactory.newServer url: 'http://artifactory:8081/artifactory/', username: 'xxxx', password: 'xxxx'
                     
                     //Find out commit hash
                     sh """cd $GOPATH/testWeb/ && git rev-parse HEAD > commit"""
@@ -89,6 +96,6 @@ pipeline {
                 }
            }
         }
-    
+        
     }
 }
