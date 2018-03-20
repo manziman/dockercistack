@@ -1,0 +1,106 @@
+pipeline {
+    node {
+   
+        // Install the desired Go version
+        def root = tool name: 'go-1.9.3', type: 'go'
+        
+        ws("${JENKINS_HOME}/jobs/${JOB_NAME}/builds/${BUILD_ID}/") {
+           withEnv(["GOPATH=${JENKINS_HOME}/jobs/${JOB_NAME}/builds/${BUILD_ID}", "GOROOT=${root}", "PATH+GO=${root}/bin"]) {
+                stage('Pre Test'){
+                    echo 'Pulling Dependencies'
+                
+                    sh 'go version'
+                    sh 'git clone http://gogs:3000/themanzi/testWeb.git'
+                    sh 'cd $GOPATH/testWeb/'
+                }
+                
+                stage('Test'){
+                
+                    //List all our project files with 'go list ./... | grep -v /vendor/ | grep -v github.com | grep -v golang.org'
+                    //Push our project files relative to ./src
+                    sh 'cd $GOPATH/testWeb && go list ./... >> projectPaths'
+
+                    //Print them with 'awk '$0="./src/"$0' projectPaths' in order to get full relative path to $GOPATH
+                    def paths = sh returnStdout: true, script: """sed 's/^_//g' $GOPATH/testWeb/projectPaths"""
+                
+                    echo 'Vetting'
+                
+                    sh """cd $GOPATH && go tool vet ${paths}"""
+                
+                    //echo 'Linting'
+                    //sh """cd $GOPATH/testWeb && golint ${paths}"""
+                
+                    echo 'Testing'
+                    sh """cd $GOPATH/testWeb && go test -race -cover"""
+                }
+                
+                stage('Build'){
+                    echo 'Building Executable'
+                    
+                    sh 'docker build -t test-image $GOPATH/testWeb/dockerfile'
+                    
+                    sh 'docker network create --attachable test'
+                    
+                    sh 'docker run -d --name server --network test -p 9090:9090 test-image testWeb'
+                    sh 'curl http://192.168.1.75:9090'
+                    
+                    sh """docker stop \$(docker ps | grep server | grep -Eo '^[^ ]+')"""
+                    sh """docker rm \$(docker ps -a | grep server | grep -Eo '^[^ ]+')"""
+                    sh 'docker network rm test'
+                    
+                    //Produced binary is $GOPATH/?
+                    sh """cd $GOPATH/testWeb/ && go build -ldflags '-s' -o testWeb.out"""
+                }
+                
+                stage('Artifactory send'){
+                    
+                    def server = Artifactory.newServer url: 'http://artifactory:8081/artifactory/', username: 'xxxx', password: 'xxxx'
+                    
+                    //Find out commit hash
+                    sh """cd $GOPATH/testWeb/ && git rev-parse HEAD > commit"""
+                    def commit = readFile("${GOPATH}/testWeb/commit").trim()
+                
+                    //Find out current branch
+                    sh """cd $GOPATH/testWeb/ && git name-rev --name-only HEAD > GIT_BRANCH"""
+                    def branch = readFile("${GOPATH}/testWeb/GIT_BRANCH").trim()
+                
+                    //strip off repo-name/origin/ (optional)
+                    branch = branch.substring(branch.lastIndexOf('/') + 1)
+                
+                    def archive = "${GOPATH}/testWeb/project-${branch}-${commit}.tar.gz"
+                    def outpath = "${GOPATH}/testWeb/testWeb.out"
+                
+                    echo "Building Archive ${archive}"
+                
+                    sh """tar -cvzf ${archive} $GOPATH/testWeb/*.go"""
+                    
+                    def uploadSourceSpec = """{
+                     "files": [
+                      {
+                          "pattern": "$GOPATH/testWeb/project-*.tar.gz",
+                          "target": "testWeb/$archive"
+                        }
+                     ]
+                    }"""
+                    
+                    def uploadBinSpec = """{
+                     "files": [
+                      {
+                          "pattern": "$GOPATH/testWeb/*.out",
+                          "target": "testWeb/$outpath"
+                        }
+                     ]
+                    }"""
+                
+                    echo "Uploading ${archive} to Artifactory"
+                    
+                    server.upload(uploadSourceSpec)
+                    server.upload(uploadBinSpec)
+
+                    // sh """curl -u themanzi:manz1238 -T ${archive} \"http://artifactory:8081/artifactory/testWeb/${archive}\""""
+                }
+           }
+        }
+        
+    }
+}

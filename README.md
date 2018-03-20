@@ -53,7 +53,8 @@ Make attachable network for stack/containers.
 
 TODO:
 Build jenkins docker image***
-Add Jenkins back to stack
+Add Jenkins back to stack***
+Docker registry server***
 
 Deploy stack and launch jenkins container.
 
@@ -102,7 +103,7 @@ Provide password for gogs db user.
 
 **Jenkins Setup**
 
-Plugins to install: Artifactory, Gogs, Robot Framework, Go.
+Plugins to install: Artifactory, Gogs, Robot Framework, Go(Golang), Node(NodeJS, NPM Pipeline Integration)
 
 Set docker binary path.
 
@@ -118,3 +119,11 @@ node {
         
     }
 ```
+
+**Artifactory Setup**
+
+Create generic repo to hold binaries and tarfiles. 
+
+Create docker registry for docker images. 
+
+TODO: limit number of previous versions.

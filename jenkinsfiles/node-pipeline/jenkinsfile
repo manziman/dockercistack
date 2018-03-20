@@ -1,0 +1,86 @@
+pipeline {
+    node {
+
+        ws("${JENKINS_HOME}/jobs/${JOB_NAME}/builds/${BUILD_ID}/") {
+        
+            withEnv(["NODEDIR=${JENKINS_HOME}/jobs/${JOB_NAME}/builds/${BUILD_ID}"]) {
+                stage('Pre Test'){
+                    echo 'Building test docker image'
+
+                    sh 'curl http://192.168.1.75/themanzi/testExpress/raw/master/dockerfile/Dockerfile >> Dockerfile'
+                    sh 'docker build -t test-express .'
+                    
+                }
+                
+                stage('Run Test'){
+                echo 'Running container'
+                
+                    sh 'docker network create --attachable test-express'
+                    
+                    sh 'docker run -d --name node-server -p 3000:3000 --network test-express test-express'
+                    
+                }
+                
+                stage('Website Test'){
+                    echo 'Testing webapp'                    
+                    
+                    sh 'sleep 5s'
+                    sh 'curl http://192.168.1.75:3000/'
+                    
+                    sh """docker stop \$(docker ps | grep node-server | grep -Eo '^[^ ]+')"""
+                    sh """docker rm \$(docker ps -a | grep node-server | grep -Eo '^[^ ]+')"""
+                    sh 'docker network rm test-express'
+                    
+                }
+                
+                /*stage('Artifactory send'){
+                    
+                    def server = Artifactory.newServer url: 'http://artifactory:8081/artifactory/', username: 'xxxx', password: 'xxxx'
+                    
+                    //Find out commit hash
+                    sh """cd $GOPATH/testWeb/ && git rev-parse HEAD > commit"""
+                    def commit = readFile("${GOPATH}/testWeb/commit").trim()
+                
+                    //Find out current branch
+                    sh """cd $GOPATH/testWeb/ && git name-rev --name-only HEAD > GIT_BRANCH"""
+                    def branch = readFile("${GOPATH}/testWeb/GIT_BRANCH").trim()
+                
+                    //strip off repo-name/origin/ (optional)
+                    branch = branch.substring(branch.lastIndexOf('/') + 1)
+                
+                    def archive = "${GOPATH}/testWeb/project-${branch}-${commit}.tar.gz"
+                    def outpath = "${GOPATH}/testWeb/testWeb.out"
+                
+                    echo "Building Archive ${archive}"
+                
+                    sh """tar -cvzf ${archive} $GOPATH/testWeb/*.go"""
+                    
+                    def uploadSourceSpec = """{
+                     "files": [
+                      {
+                          "pattern": "$GOPATH/testWeb/project-*.tar.gz",
+                          "target": "testWeb/$archive"
+                        }
+                     ]
+                    }"""
+                    
+                    def uploadBinSpec = """{
+                     "files": [
+                      {
+                          "pattern": "$GOPATH/testWeb/*.out",
+                          "target": "testWeb/$outpath"
+                        }
+                     ]
+                    }"""
+                
+                    echo "Uploading ${archive} to Artifactory"
+                    
+                    server.upload(uploadSourceSpec)
+                    server.upload(uploadBinSpec)
+
+                    // sh """curl -u themanzi:manz1238 -T ${archive} \"http://artifactory:8081/artifactory/testWeb/${archive}\""""
+                }*/
+            }
+        }   
+    }
+}
