@@ -1,4 +1,4 @@
-**Setup (w/Centos7)**
+***Docker Setup (w/Centos7)***
 
 Install docker:
 
@@ -18,13 +18,13 @@ make
 semodule -i dockersock.pp
 ```
 
-Pull the required images for the stack:
+Or disable SELinux...
 
-`docker pull gogs/gogs && docker pull jenkins/jenkins:lts && docker pull docker.bintray.io/jfrog/artifactory-oss:5.9.1 && docker pull postgres`
+Pull the required images for the stack.
 
-Create the docker-compose config file:
+`docker pull gogs/gogs && docker pull jenkins/jenkins:lts && docker pull docker.bintray.io/jfrog/artifactory-oss:5.9.1 && docker pull postgres && docker pull ppodgorsek/docker-robot-framework`
 
-`sudo vi docker-compose.yml`
+Add the `docker-compose.yml` file to the working directory.
 
 ```
 version: "3"
@@ -32,6 +32,11 @@ version: "3"
 ...
 ```
 
+**Build images**
+
+Build the docker image for Jenkins to add docker support.
+
+`docker build -t jenkins-docker ./dockerfiles/jenkins-docker`
 
 Make directories for volume mounts.
 
@@ -52,9 +57,8 @@ Make attachable network for stack/containers.
 `docker network create --driver=overlay --attachable dev`
 
 TODO:
-Build jenkins docker image***
+Build robot framework image***
 Add Jenkins back to stack***
-Docker registry server***
 
 Deploy stack and launch jenkins container.
 

@@ -7,17 +7,17 @@ pipeline {
                 stage('Pre Test'){
                     echo 'Building test docker image'
 
-                    sh 'curl http://192.168.1.75/themanzi/testExpress/raw/master/dockerfile/Dockerfile >> Dockerfile'
-                    sh 'docker build -t test-express .'
+                    sh 'curl http://<REPO_IP:PORT>/<REPO_OWNER>/<REPO_NAME>/raw/master/dockerfile/Dockerfile >> Dockerfile'
+                    sh 'docker build -t <IMAGE_NAME> .'
                     
                 }
                 
                 stage('Run Test'){
                 echo 'Running container'
                 
-                    sh 'docker network create --attachable test-express'
+                    sh 'docker network create --attachable <IMAGE_NAME>'
                     
-                    sh 'docker run -d --name node-server -p 3000:3000 --network test-express test-express'
+                    sh 'docker run -d --rm --name node-server -p 3000:3000 --network test <IMAGE_NAME>'
                     
                 }
                 
@@ -25,61 +25,52 @@ pipeline {
                     echo 'Testing webapp'                    
                     
                     sh 'sleep 5s'
-                    sh 'curl http://192.168.1.75:3000/'
+                    sh 'curl http://<LOCAL_IP>:3000/'
                     
+                    sh 'rm -rf /root/reports/node/*'
+                    
+                    sh """[ \"\$(docker run -t --rm --name robot-server --network test-express -v /root/reports/node:/opt/robotframework/reports -v /root/test/node:/opt/robotframework/tests robot-framework-xvfb robot -d /opt/robotframework/reports/ /opt/robotframework/tests/ | grep '0 passed')\" = '' ] && exit 0 || echo 'Tests failed!'; exit 1"""
+
                     sh """docker stop \$(docker ps | grep node-server | grep -Eo '^[^ ]+')"""
-                    sh """docker rm \$(docker ps -a | grep node-server | grep -Eo '^[^ ]+')"""
                     sh 'docker network rm test-express'
                     
                 }
                 
-                /*stage('Artifactory send'){
-                    
-                    def server = Artifactory.newServer url: 'http://artifactory:8081/artifactory/', username: 'xxxx', password: 'xxxx'
-                    
+                stage('Artifactory preparation/send') {
+                
+                    def server = Artifactory.newServer url: 'http://<ARTIFACTORY_IP:PORT>/artifactory/', username: 'xxxx', password: 'xxxx'
+                        
+                    sh "cd ${NODEDIR}"
                     //Find out commit hash
-                    sh """cd $GOPATH/testWeb/ && git rev-parse HEAD > commit"""
-                    def commit = readFile("${GOPATH}/testWeb/commit").trim()
+                    sh """git ls-remote http://<REPO_IP:PORT>/<REPO_OWNER>/<REPO_NAME>.git | awk 'NR==1{print \$1}' > commit"""
+                    def commit = readFile("${NODEDIR}/commit").trim()
                 
                     //Find out current branch
-                    sh """cd $GOPATH/testWeb/ && git name-rev --name-only HEAD > GIT_BRANCH"""
-                    def branch = readFile("${GOPATH}/testWeb/GIT_BRANCH").trim()
+                    sh """git ls-remote http://<REPO_IP:PORT>/<REPO_OWNER>/<REPO_NAME>.git | awk 'NR==2{print \$2}' | sed 's/.*\\///g' > GIT_BRANCH"""
+                    def branch = readFile("${NODEDIR}/GIT_BRANCH").trim()
                 
                     //strip off repo-name/origin/ (optional)
                     branch = branch.substring(branch.lastIndexOf('/') + 1)
                 
-                    def archive = "${GOPATH}/testWeb/project-${branch}-${commit}.tar.gz"
-                    def outpath = "${GOPATH}/testWeb/testWeb.out"
-                
-                    echo "Building Archive ${archive}"
-                
-                    sh """tar -cvzf ${archive} $GOPATH/testWeb/*.go"""
+                    def docker = "${NODEDIR}/<REPO_NAME>-docker-${branch}-${commit}.tar.gz"
                     
-                    def uploadSourceSpec = """{
-                     "files": [
-                      {
-                          "pattern": "$GOPATH/testWeb/project-*.tar.gz",
-                          "target": "testWeb/$archive"
-                        }
-                     ]
-                    }"""
+                    echo "Saving docker image ${docker}"
                     
-                    def uploadBinSpec = """{
-                     "files": [
-                      {
-                          "pattern": "$GOPATH/testWeb/*.out",
-                          "target": "testWeb/$outpath"
-                        }
-                     ]
-                    }"""
-                
-                    echo "Uploading ${archive} to Artifactory"
-                    
-                    server.upload(uploadSourceSpec)
-                    server.upload(uploadBinSpec)
+                    sh """docker save -o ${NODEDIR}/<REPO_NAME>-docker-${branch}-${commit}.tar test-image;  gzip ${NODEDIR}/<REPO_NAME>-docker-${branch}-${commit}.tar"""
 
-                    // sh """curl -u themanzi:manz1238 -T ${archive} \"http://artifactory:8081/artifactory/testWeb/${archive}\""""
-                }*/
+                    def uploadDockerSpec = """{
+                     "files": [
+                      {
+                          "pattern": "$NODEDIR/*docker-*.tar.gz",
+                          "target": "<REPO_NAME>/$docker"
+                        }
+                     ]
+                    }"""
+                
+                    echo "Uploading ${docker}.gz to Artifactory"
+                    
+                    server.upload(uploadDockerSpec)
+                }
             }
         }   
     }

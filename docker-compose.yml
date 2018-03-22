@@ -3,7 +3,6 @@ version: "3"
 services:
   gogs:
     image: gogs/gogs
-    container_name: gogs
     deploy:
       restart_policy: 
         condition: on-failure
@@ -16,7 +15,6 @@ services:
       - '/srv/gogs:/data'
   artifactory:
     image: docker.bintray.io/jfrog/artifactory-oss:5.9.1
-    container_name: artifactory
     deploy:
       restart_policy: 
         condition: on-failure
@@ -28,7 +26,6 @@ services:
       - '/srv/artifactory:/var/opt/jfrog/artifactory'
   postgres:
     image: postgres
-    container_name: postgres
     deploy:
       restart_policy: 
         condition: on-failure
@@ -38,6 +35,19 @@ services:
       - POSTGRESQL_PASSWORD="${POSTGRESQL_PASSWORD}"
     volumes:
       - '/srv/postgres:/var/lib/postgresql/data'
+  jenkins:
+    image: jenkins-docker
+    deploy:
+      restart_policy:
+        condition: on-failure
+    networks:
+      - dev
+    ports:
+      - 8080:8080
+      - 50000:50000
+    volumes:
+      - '/srv/jenkins:/var/jenkins_home'
+      - '/var/run/docker.sock:/var/run/docker.sock'
 
 networks:
   dev:
